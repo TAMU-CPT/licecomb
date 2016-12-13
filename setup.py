@@ -9,7 +9,7 @@ setup(
     version='0.1',
     license='mit',
     install_requires=[
-        "github3.py >=0.7, <0.8",
+        "PyGithub",
         "requests >=1.2, <1.3",
     ],
     packages=['licecomb'],
