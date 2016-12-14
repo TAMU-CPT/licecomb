@@ -10,7 +10,7 @@ setup(
     license='mit',
     install_requires=[
         "PyGithub",
-        "requests >=1.2, <1.3",
+        "requests",
     ],
     packages=['licecomb'],
     entry_points={
