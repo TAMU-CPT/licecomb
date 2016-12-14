@@ -1,14 +1,15 @@
 #!/usr/bin/env python
 from __future__ import print_function, division, absolute_import, unicode_literals
-from github import Github
+import github
 import argparse
 import sys
+import xml.etree.ElementTree as ET
 
 
 
 # TODO Put this somewhere better
 import os
-gh = Github(
+gh = github.Github(
     login_or_token=os.environ.get('GITHUB_USERNAME', None) or os.environ.get('GITHUB_OAUTH_TOKEN', None),
     password=os.environ.get('GITHUB_PASSWORD', None),
 )
@@ -21,31 +22,26 @@ def licecomb(owner, repository_names, **options):
     for repository in repositories:
         if options['ignore_forks'] and repository.fork:
             continue
-        status[repository.name] = repository_has_license(repository)
 
-    status2 = {True: [], False: []}
-    for (repository_name, has_license) in status.items():
-        status2[has_license].append(repository_name)
+        sys.stderr.write("Checking %s\n" % repository.name)
+        status[repository.name] = (
+            repository_has_license(repository),
+            repository_has_readme(repository)
+        )
 
-    return status2
+    return status
 
 
 def get_repositories(owner, repository_names):
-    # if repository_names:
-        # repositories = []
-        # not_found = []
-        # for repository_name in repository_names:
-            # repository = gh.repository(owner, repository_name)
-            # if repository:
-                # repositories.append(repository)
-            # else:
-                # not_found.append(repository_name)
-        # if not_found:
-            # raise ValueError("Could not find repositories %s" % ", ".join(["%s/%s" % (owner, repository_name) for repository_name in not_found]))
-    # else:
     for repo in gh.get_user(owner).get_repos():
         yield repo
 
+def repository_has_readme(repository):
+    try:
+        repository.get_file_contents('README.md')
+        return True
+    except Exception:
+        return False
 
 def repository_has_license(repository):
     try:
@@ -66,13 +62,25 @@ def main():
     args.owner = args.owner[0] # http://docs.python.org/2.7/library/argparse.html#nargs - "Note that nargs=1 produces a list of one item."
     status = licecomb(**vars(args))
 
-    if args.verbose and True in status:
-        for repository_name in status[True]:
-            print("SUCCESS: Found a license file in %s/%s" % (args.owner, repository_name))
-    if False in status:
-        for repository_name in status[False]:
-            print("ERROR: Could not find a license file in %s/%s" % (args.owner, repository_name), file=sys.stderr)
-        sys.exit(1)
+    passing = 0
+    failing = 0
+
+    root = ET.Element("testsuite", name='licecomb', tests=str(passing + failing), errors=str(failing), failures="0", skip="0")
+    className = 'licecomb.%s' % args.owner
+    for repo in status:
+        has_license, has_readme = status[repo]
+        license_test = ET.SubElement(root, 'testcase', classname=className + '.license', name=repo, time='0')
+
+        if not has_license:
+            ET.SubElement(license_test, 'error', type='exceptions.MissingLicense', message='Repository is missing a LICENSE')
+
+        readme_test = ET.SubElement(root, 'testcase', classname=className + '.readme', name=repo, time='0')
+        if not has_readme:
+            ET.SubElement(readme_test, 'error', type='exceptions.MissingReadme', message='Repository is missing a README.md')
+
+    tree = ET.ElementTree(root)
+    tree.write('xunit.xml')
+
 
     sys.exit(0)
 
