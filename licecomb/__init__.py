@@ -41,7 +41,11 @@ def repository_has_readme(repository):
         repository.get_file_contents('README.md')
         return True
     except Exception:
-        return False
+        try:
+            repository.get_file_contents('README.rst')
+            return True
+        except Exception:
+            return False
 
 def repository_has_license(repository):
     try:
